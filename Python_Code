@@ -1,0 +1,116 @@
+from tkinter import *
+from tkinter import filedialog
+from pathlib import Path
+import requests
+import json
+import pandas as pd
+import time as t
+import os
+import shutil
+
+dados_t = {}
+dados_erros_t = {}
+dados_cnpj = []
+dados_atividade = []
+dados_erros = []
+
+def buscar_dados_id(id):
+    # Acessando a API
+    request = requests.get("https://www.receitaws.com.br/v1/cnpj/{}".format(id))
+    if request.status_code == 200:
+        rawData = request.json()
+        try:
+            d = rawData['atividade_principal'][0]
+            dt = {}
+            dt['CNPJ'] = id
+            dt['atividade_principal'] = d['text']
+            dados_cnpj.append(id)
+            print(id)
+            dados_atividade.append(d['text'])
+            print(d['text'])
+            return dados_cnpj, dados_atividade
+        except (KeyError, IndexError,UnboundLocalError):
+            dados_erros.append(id)
+            print(f'Id com erro: {id}')
+            return dados_erros
+    else:
+        return request.status_code
+
+def gravar(dados_gravar):
+    # gravar em pasta especifica
+    desktop = Path.home()
+    dados_gravar.to_excel('DadosCNPJ.xlsx', index=False, encoding='utf-8')
+    # retorna o caminho onde foi salvo o arquivo, pode ser igual ao desktop ou não
+    path_DadosCNPJ = os.getcwd()
+    fileName = str(desktop) + "/Downloads/DadosCNPJ.xlsx"
+    if os.path.isfile(fileName) == False:
+        shutil.move(str(path_DadosCNPJ) + '/DadosCNPJ.xlsx', str(desktop) + "/Downloads")
+    else:
+        os.remove(str(desktop) + "/Downloads/DadosCNPJ.xlsx")
+        shutil.move(str(path_DadosCNPJ) + '/DadosCNPJ.xlsx', str(desktop) + "/Downloads")
+
+def gravar_erro(dados_erro):
+    # gravar em pasta especifica
+    desktop = Path.home()
+    dados_erro.to_excel('DadosErroCNPJ.xlsx', index=False, encoding='utf-8')
+    # retorna o caminho onde foi salvo o arquivo, pode ser igual ao desktop ou não
+    path_DadosCNPJ = os.getcwd()
+    fileName = str(desktop) + "/Downloads/DadosErroCNPJ.xlsx"
+    if os.path.isfile(fileName) == False:
+        shutil.move(str(path_DadosCNPJ) + '/DadosErroCNPJ.xlsx', str(desktop) + "/Downloads")
+    else:
+        os.remove(str(desktop) + "/Downloads/DadosErroCNPJ.xlsx")
+        shutil.move(str(path_DadosCNPJ) + '/DadosErroCNPJ.xlsx', str(desktop) + "/Downloads")
+
+def abrirArquivo():
+    global arquivo
+    arquivo = filedialog.askopenfilename()
+    destroy()
+
+def destroy():
+    window.destroy()
+
+window = Tk()
+window.title("Escolha um arquivo")
+window.geometry('280x30')
+
+botaoAbrir = Button(window, text="Buscar", width=15, command=abrirArquivo)
+botaoAbrir.pack()
+
+window.mainloop()
+
+dados = pd.read_excel(arquivo)
+# Opção por importação com o arquivo na pasta determinada
+print("N° de CPF's:", dados.size)
+for index, row in dados.iterrows():
+    t.sleep(20)
+    tam = len(str(row["CNPJ"]))
+    if tam == 13:
+        num = "0" + str(row["CNPJ"])
+    elif tam == 12:
+        num = "00" + str(row["CNPJ"])
+    elif tam == 11:
+        num = "000" + str(row["CNPJ"])
+    else:
+        num = str(row["CNPJ"])
+    print("Lendo a linha:", index + 1)
+    buscar_dados_id(num)
+
+dados_t = pd.DataFrame(dados_t)
+dados_t = dados_t.assign(cnpj=dados_cnpj, atividade_principal=dados_atividade)
+
+# Gravando os dados
+gravar(dados_t)
+
+dados_erros_t = pd.DataFrame(dados_erros)
+dados_erros_t = dados_erros_t.assign(id=id)
+gravar_erro(dados_erros_t)
+
+msgfinal = Tk()
+msgfinal.title("Dados exportados!")
+msgfinal.geometry('280x30')
+
+titulo = Label(msgfinal, text="Arquivo pronto, " + str(dados.size) + " CNPJ capturados ")
+titulo.pack()
+
+msgfinal.mainloop()
